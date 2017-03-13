@@ -8,7 +8,7 @@ class CreateCCSMobilePatients {
 
 	static main(args) {
 		def envLength = args.length
-		if (envLength == 0 || envLength > 2 ) {
+		if (envLength == 0 || envLength > 1 ) {
 			println "You must enter one valid environment name (case insensitive, e.g. RND2) as a parameter. Program will stop."
 			// the program cannot proceed, as it needs an environment
 			System.exit(0)

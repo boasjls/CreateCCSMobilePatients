@@ -110,20 +110,28 @@ class CreateCCSMobilePatients {
 		//////////////////////////////////////////
 		String[] PatientNoEncounter = ["010100-6003"]
 		createPatients(PatientNoEncounter, url, getIdentURL, false, "")
+		
+		//////////////////////////////////////////
+		//Print CPR numbers for all testpatients//
+		//////////////////////////////////////////
+		println "\n---------------------------------------"
+		println "------ Patients for config file: ------"
+		println "---------------------------------------"
+		println " - Patients with ages 0 months, 4 months, 1 year, 4 years, 8 years, 13 years, 20 years (female), 20 years (male), 71 years (senior): \n"+ cprNumbers.toString()
+		println " - Patients with outpatient encounters: "+ outpatient.toString()
+		println " - Patients with emergency encounters: "+ emergency.toString()
+		println " - Patients with inpatient encounters: "+ inpatient.toString()
+		println " - Patient with no encounter: "+ PatientNoEncounter.toString()
 	}
 
 	private static void createPatients(String[] cprNumberArray, String url, String getIdentURL, Boolean createEncounter, String encounterType) {
-
 		for (int i = 0; i < cprNumberArray.length; i++){
 			def CPR = cprNumberArray[i].substring(0,6)+cprNumberArray[i].substring(7)//ditches the '-' in the CPR number
 			createPatientUsingSOAPMessage(CPR, url, getIdentURL, createEncounter, encounterType) //replace with 'CPR' variable later...
 		}
 	}
 
-
-
 	private static void createPatientUsingSOAPMessage(String cpr, String url, String getIdentURL, Boolean createEncounter, String encounterType){
-
 		def identURL = getIdentURL
 		def root = ""
 		if (!cpr.matches(".*[a-zA-Z].*")) { // if it is a real CPR
@@ -155,7 +163,6 @@ class CreateCCSMobilePatients {
 			def response = client.send(soapRequest)
 			println "\nNy patient oprettet med CPR: " + cpr + ", og PAM Id: " + response.CreatePatientResponse.PatientId.text()
 			//println "Ny patient: " + response
-
 			//Create encounter for patient
 			if (createEncounter){
 				def pamId = response.CreatePatientResponse.PatientId.text()
@@ -168,10 +175,12 @@ class CreateCCSMobilePatients {
 			if (e.getMessage().contains("PAMPAT00029_UNIQUE_PERSON_IDENT")){
 				//println "Fejl: " + e.toString()
 				println "Patient " + cpr + " findes allerede."
-
+				//In case we want an encounter to be created
 				if (createEncounter){
 					println "Opretter en ny kontakt..."
+					//Get PAM Id for existing patient/CPR
 					def ident = getIdentOfExistingCPR(cpr, identURL)
+					//Create the encounter
 					createEncounterUsingSOAPMessage(ident, "IMP", url)
 				}
 			}
@@ -216,7 +225,6 @@ class CreateCCSMobilePatients {
 		try {
 			def response = client.send(soapRequest)
 			println "Kontakt oprettet for patient med PAM Id: " + pamId + ".\n"
-
 		}
 		catch (e) {
 			// If something goes wrong, show the error
@@ -227,14 +235,12 @@ class CreateCCSMobilePatients {
 	}
 
 	private static String getIdentOfExistingCPR(String cpr, String identURL){
-
 		def root = "";
 		if (!cpr.matches(".*[a-zA-Z].*")) { // if it is a real CPR
 			root = "1.3.6.1.4.1.25208.10.20"
 		} else { // if it is a replacement CPR
 			root = "1.3.6.1.4.1.25208.20.81.20.10.30.2"
 		}
-
 		def soapRequest = """
 		<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://scandihealth.com/ccs/util/schemas" xmlns:sch1="http://scandihealth.com/pam/services/webservice/ccspatientexternal/schemas">
 			<SOAP-ENV:Header>
@@ -252,7 +258,7 @@ class CreateCCSMobilePatients {
 				</sch1:getByIdent>
 			</SOAP-ENV:Body>
 		</SOAP-ENV:Envelope>"""
-		//println soapRequest
+
 		def client = new SOAPClient(identURL)
 		try {
 			def response = client.send(soapRequest)
@@ -260,7 +266,6 @@ class CreateCCSMobilePatients {
 			def pamId = body.substring(body.lastIndexOf(".10")+3)
 			println "Fandt PAM Id " +pamId+  " for eksisterende patient."
 			return pamId
-
 		}
 		catch (e) {
 			println "Error occurred"

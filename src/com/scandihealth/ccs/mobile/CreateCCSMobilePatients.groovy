@@ -7,14 +7,36 @@ import groovy.time.TimeCategory
 class CreateCCSMobilePatients {
 
 	static main(args) {
+
+		def (environment, printer) = parseCommandLineArguments(args)
+		def (url, getIdentURL) = getConfigForEnvironment(environment)
+
+		def patients = createPatientsForEnvironment(environment, url, getIdentURL)
+
+		def config = [
+			patients: patients
+		]
+
+		serializeConfig(config, printer)
+	}
+
+	static parseCommandLineArguments(args) {
 		def envLength = args.length
-		if (envLength == 0 || envLength > 1 ) {
+		if (envLength == 0 || envLength > 2 ) {
 			println "You must enter one valid environment name (case insensitive, e.g. RND2) as a parameter. Program will stop."
 			// the program cannot proceed, as it needs an environment
-			System.exit(0)
+			System.exit(-1)
 		}
+		def printer = envLength > 1 ?
+				new PrintStream(new File(args[1]))
+				: System.out
 
 		String environment = args[0]
+
+		return [environment, printer]
+	}
+
+	static getConfigForEnvironment(environment) {
 		String url
 		String getIdentURL
 
@@ -40,93 +62,95 @@ class CreateCCSMobilePatients {
 		else {
 			println("No supported environment was given as parameter. Contact the developer of this program. Program will stop.");
 			// the program cannot proceed, as it needs an environment
-			System.exit(0)
+			System.exit(-1)
 		}
+
+		return [url, getIdentURL]
+	}
+
+	static createStandardCPRForAge(age, postfix) {
+		use(TimeCategory) {
+			def today = new Date()
+			def birthday = (today - age).format('ddMMyy')
+			return "${birthday}-${postfix}"
+		}
+	}
+
+	static createPatientsForEnvironment(environment, url, getIdentURL) {
 
 		//Setting up CPR numbers to match the desired ages of test patients
 		def localDate = new Date()
 		def today = localDate.getCalendarDate().toString() // format example: 2017-02-14T12:28:32.089+0100
-		def cprNumbers = new String[9]
-		// 0 months old
-		cprNumbers[0] = today.substring(8,10) + today.substring(5,7) + today.substring(2,4) + "-" + "6001"
-		// 4 months old
-		use(TimeCategory) {
-			def fourMonthsDate = (new Date() - 4.months).format('yyyy-MM-dd')
-			cprNumbers[1] = fourMonthsDate.substring(8,10) + fourMonthsDate.substring(5,7) + fourMonthsDate.substring(2,4) + "-" + "6001"
+		def cprNumbers = use(TimeCategory) {
+			[
+				patientNewbornId: createStandardCPRForAge(0.days, '6001'),
+				patientAgeThreeMonthsId: createStandardCPRForAge(4.months, '6001'),
+				patientAgeOneId: createStandardCPRForAge(1.year, '6001'),
+				patientAgeFourId: createStandardCPRForAge(4.years, '6001'),
+				patientAgeEightId: createStandardCPRForAge(8.years, '6001'),
+				patientAgeThirteenId: createStandardCPRForAge(13.years, '6001'),
+				adultFemalePatientId: createStandardCPRForAge(20.years, '0002'),
+				adultMalePatientId: createStandardCPRForAge(20.years, '0001'),
+				seniorMalePatientId: createStandardCPRForAge(71.years, '0001')
+			]
 		}
-		// 1 year old
-		use(TimeCategory) {
-			def fourMonthsDate = (new Date() - 1.year).format('yyyy-MM-dd')
-			cprNumbers[2] = fourMonthsDate.substring(8,10) + fourMonthsDate.substring(5,7) + fourMonthsDate.substring(2,4) + "-" + "6001"
-		}
-		// 4 years old
-		use(TimeCategory) {
-			def fourMonthsDate = (new Date() - 4.years).format('yyyy-MM-dd')
-			cprNumbers[3] = fourMonthsDate.substring(8,10) + fourMonthsDate.substring(5,7) + fourMonthsDate.substring(2,4) + "-" + "6001"
-		}
-		// 8 years old
-		use(TimeCategory) {
-			def fourMonthsDate = (new Date() - 8.years).format('yyyy-MM-dd')
-			cprNumbers[4] = fourMonthsDate.substring(8,10) + fourMonthsDate.substring(5,7) + fourMonthsDate.substring(2,4) + "-" + "6001"
-		}
-		// 13 years old
-		use(TimeCategory) {
-			def fourMonthsDate = (new Date() - 13.years).format('yyyy-MM-dd')
-			cprNumbers[5] = fourMonthsDate.substring(8,10) + fourMonthsDate.substring(5,7) + fourMonthsDate.substring(2,4) + "-" + "6001"
-		}
-		// 20 years old female
-		use(TimeCategory) {
-			def fourMonthsDate = (new Date() - 20.years).format('yyyy-MM-dd')
-			cprNumbers[6] = fourMonthsDate.substring(8,10) + fourMonthsDate.substring(5,7) + fourMonthsDate.substring(2,4) + "-" + "0002"
-		}
-		// 20 years old male
-		use(TimeCategory) {
-			def fourMonthsDate = (new Date() - 20.years).format('yyyy-MM-dd')
-			cprNumbers[7] = fourMonthsDate.substring(8,10) + fourMonthsDate.substring(5,7) + fourMonthsDate.substring(2,4) + "-" + "0001"
-		}
-		// 71 years old
-		use(TimeCategory) {
-			def fourMonthsDate = (new Date() - 71.years).format('yyyy-MM-dd')
-			cprNumbers[8] = fourMonthsDate.substring(8,10) + fourMonthsDate.substring(5,7) + fourMonthsDate.substring(2,4) + "-" + "0001"
-		}
-
 		//////////////////////////////////////////
 		//Create the patients with specific ages//
 		//////////////////////////////////////////
 		createPatients(cprNumbers, url, getIdentURL, true, "IMP")
-        	
+
 		//////////////////////////////////////////////////////
 		// Create the patients with specific encounter types//
 		//////////////////////////////////////////////////////
-		String[] outpatient = ["010100-6001", "010100-6AA1"]
-		String[] emergency = ["010100-6002", "010100-6AA2"]
-		String[] inpatient = ["010100-6AA3"]
-		createPatients(outpatient, url, getIdentURL, true, "AMB");
+		def outPatient = [cpr: '010100-6001', 'replacement': '010100-6AA1']
+		def emergency = [cpr: '010100-6002', replacement: '010100-6AA2']
+		def inPatient = [cpr: '010100-6AA3']
+		createPatients(outPatient, url, getIdentURL, true, "AMB");
 		createPatients(emergency, url, getIdentURL, true, "EMER");
-		createPatients(inpatient, url, getIdentURL, true, "IMP");
-		
+		createPatients(inPatient, url, getIdentURL, true, "IMP");
+
 		//////////////////////////////////////////
 		// Create the patient with no encounters//
 		//////////////////////////////////////////
-		String[] PatientNoEncounter = ["010100-6003"]
-		createPatients(PatientNoEncounter, url, getIdentURL, false, "")
-		
-		//////////////////////////////////////////
-		//Print CPR numbers for all testpatients//
-		//////////////////////////////////////////
-		println "\n---------------------------------------"
-		println "------ Patients for config file: ------"
-		println "---------------------------------------"
-		println " - Patients with ages 0 months, 4 months, 1 year, 4 years, 8 years, 13 years, 20 years (female), 20 years (male), 71 years (senior): \n"+ cprNumbers.toString()
-		println " - Patients with outpatient encounters: "+ outpatient.toString()
-		println " - Patients with emergency encounters: "+ emergency.toString()
-		println " - Patients with inpatient encounters: "+ inpatient.toString()
-		println " - Patient with no encounter: "+ PatientNoEncounter.toString()
+		def noEncounter = [cpr: '010100-6003']
+		createPatients(noEncounter, url, getIdentURL, false, "")
+
+		def patients = cprNumbers + [
+			search: [
+				outPatient: outPatient, emergency: emergency,
+				inPatient: inPatient, noEncounter: noEncounter,
+				contact: '80013812'
+			]
+		]
+
+		return patients
 	}
 
-	private static void createPatients(String[] cprNumberArray, String url, String getIdentURL, Boolean createEncounter, String encounterType) {
-		for (int i = 0; i < cprNumberArray.length; i++){
-			def CPR = cprNumberArray[i].substring(0,6)+cprNumberArray[i].substring(7)//ditches the '-' in the CPR number
+	private static printIndent(printer, indent) {
+		indent.times {
+			printer.write("\t")
+		}
+	}
+
+	private static serializeConfig(nodes, PrintStream printer, indent = 0) {
+		nodes.each { key, value ->
+			if (value instanceof Map) {
+				printIndent(printer, indent)
+				printer.println("${key} {")
+				serializeConfig(value, printer, indent + 1)
+				printIndent(printer, indent)
+				printer.println("}")
+			} else {
+				printIndent(printer, indent)
+				printer.println("${key} = '${value}'")
+			}
+		}
+	}
+
+	private static void createPatients(Map<String, String> cprNumbers, String url, String getIdentURL, Boolean createEncounter, String encounterType) {
+		for (Map.Entry e in cprNumbers) {
+			def cprNumber = e.getValue()
+			def CPR = cprNumber.substring(0,6) + cprNumber.substring(7) //ditches the '-' in the CPR number
 			createPatientUsingSOAPMessage(CPR, url, getIdentURL, createEncounter, encounterType) //replace with 'CPR' variable later...
 		}
 	}
@@ -273,6 +297,4 @@ class CreateCCSMobilePatients {
 			println e.printStackTrace();
 		}
 	}
-	
-	//TODO Skriv det smart ud i konsollen, så det er CPR numre og deres tekster, der smides til allersidst... (opdatér en liste med key/value under vejs og skriv ud til sidst...)
 }
